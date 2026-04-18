@@ -11,6 +11,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 $input = json_decode(file_get_contents("php://input"), true);
 $action = $_GET['action'] ?? '';
 
+if ($action === 'config') {
+    echo json_encode(["apiKey" => getenv("GEMINI_API_KEY")]);
+    exit;
+}
+
 const EXT_MAP = [
     ".js" => "JavaScript",
     ".ts" => "TypeScript",
@@ -120,9 +125,24 @@ if ($action === 'zip') {
         $zip->close();
         
         $analysis = analyzeFiles($files);
+        $samples = [];
+        $codeExtensions = [".php", ".js", ".py", ".ts", ".tsx", ".jsx"];
+        $sCount = 0;
+        foreach($files as $f) {
+            $ext = "." . (pathinfo($f['name'])['extension'] ?? '');
+            if (in_array(strtolower($ext), $codeExtensions) && $sCount < 5) {
+                $samples[] = [
+                    "name" => $f['name'],
+                    "content" => substr($f['content'], 0, 5000)
+                ];
+                $sCount++;
+            }
+        }
+
         echo json_encode(array_merge($analysis, [
             "projectName" => $_FILES['file']['name'],
-            "source" => "zip"
+            "source" => "zip",
+            "samples" => $samples
         ]));
     } else {
         echo json_encode(["error" => "Failed to open ZIP"]);
@@ -189,31 +209,56 @@ if ($action === 'github') {
     $tree = $treeData['tree'];
     $files = [];
     $markers = ["package.json", "composer.json", "requirements.txt", "Gemfile"];
+    $codeExtensions = [".php", ".js", ".py", ".ts", ".tsx", ".jsx"];
+    $sampleCount = 0;
+    $maxSamples = 5; // Fetch up to 5 code files for AI analysis
     
     foreach ($tree as $node) {
         if ($node['type'] === 'blob') {
             $files[] = ["name" => $node['path']];
             
-            // Check if it's a marker file and fetch content
+            $pathInfo = pathinfo($node['path']);
+            $ext = "." . ($pathInfo['extension'] ?? '');
+            
+            $isMarker = false;
             foreach ($markers as $marker) {
                 if (str_ends_with($node['path'], $marker)) {
-                    $contentJson = file_get_contents($node['url'], false, $ctx);
-                    $contentData = json_decode($contentJson, true);
-                    if (isset($contentData['content'])) {
-                        $content = base64_decode($contentData['content']);
-                        // Add or update content
-                        $files[count($files)-1]['content'] = $content;
-                    }
+                    $isMarker = true;
+                    break;
+                }
+            }
+
+            $isCode = in_array(strtolower($ext), $codeExtensions);
+
+            if ($isMarker || ($isCode && $sampleCount < $maxSamples)) {
+                $contentJson = file_get_contents($node['url'], false, $ctx);
+                $contentData = json_decode($contentJson, true);
+                if (isset($contentData['content'])) {
+                    $content = base64_decode($contentData['content']);
+                    $files[count($files)-1]['content'] = $content;
+                    if ($isCode && !$isMarker) $sampleCount++;
                 }
             }
         }
     }
 
     $analysis = analyzeFiles($files);
+    // Provide samples for frontend AI analysis
+    $samples = [];
+    foreach($files as $f) {
+        if (isset($f['content']) && !empty($f['content'])) {
+            $samples[] = [
+                "name" => $f['name'],
+                "content" => substr($f['content'], 0, 5000) // limit size
+            ];
+        }
+    }
+
     echo json_encode(array_merge($analysis, [
         "projectName" => $repo,
         "source" => "github",
-        "isLive" => $isLive
+        "isLive" => $isLive,
+        "samples" => $samples
     ]));
     exit;
 }

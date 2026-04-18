@@ -139,39 +139,60 @@
         <div id="resultArea" style="display: none;" class="space-y-8 pb-20">
             <div id="reportContent" class="space-y-8">
                 <!-- Overview -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div class="glass-panel p-6 flex flex-col items-center justify-center text-center">
-                        <span class="text-sm text-text-dim uppercase tracking-wider mb-2">Originality Score</span>
-                        <div class="relative w-32 h-32 flex items-center justify-center">
+                        <span class="text-xs text-text-dim uppercase tracking-wider mb-2">Originality Score</span>
+                        <div class="relative w-24 h-24 flex items-center justify-center">
                             <svg class="w-full h-full transform -rotate-90">
-                                <circle cx="64" cy="64" r="58" stroke="var(--border)" stroke-width="8" fill="none"/>
-                                <circle id="scoreCircle" cx="64" cy="64" r="58" stroke="var(--accent)" stroke-width="8" fill="none" stroke-dasharray="364.4" stroke-dashoffset="364.4" stroke-linecap="round"/>
+                                <circle cx="48" cy="48" r="42" stroke="var(--border)" stroke-width="6" fill="none"/>
+                                <circle id="scoreCircle" cx="48" cy="48" r="42" stroke="var(--accent)" stroke-width="6" fill="none" stroke-dasharray="263.8" stroke-dashoffset="263.8" stroke-linecap="round"/>
                             </svg>
-                            <span id="scoreText" class="absolute text-3xl font-bold">0%</span>
+                            <span id="scoreText" class="absolute text-xl font-bold">0%</span>
                         </div>
                     </div>
-                    <div class="glass-panel p-6 space-y-4">
-                        <div class="flex justify-between items-center text-sm">
-                            <span class="text-text-dim">Project Name</span>
-                            <span id="pName" class="font-mono text-blue-400">N/A</span>
+                    <div class="glass-panel p-6 flex flex-col items-center justify-center text-center">
+                        <span class="text-xs text-text-dim uppercase tracking-wider mb-2">AI Probability</span>
+                        <div class="relative w-24 h-24 flex items-center justify-center">
+                            <svg class="w-full h-full transform -rotate-90">
+                                <circle cx="48" cy="48" r="42" stroke="var(--border)" stroke-width="6" fill="none"/>
+                                <circle id="aiCircle" cx="48" cy="48" r="42" stroke="var(--warning)" stroke-width="6" fill="none" stroke-dasharray="263.8" stroke-dashoffset="263.8" stroke-linecap="round"/>
+                            </svg>
+                            <span id="aiText" class="absolute text-xl font-bold">--</span>
                         </div>
-                        <div class="flex justify-between items-center text-sm">
+                    </div>
+                    <div class="glass-panel p-6 space-y-3">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-text-dim">Project</span>
+                            <span id="pName" class="font-mono text-blue-400 truncate max-w-[100px]">N/A</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs">
                             <span class="text-text-dim">Source</span>
                             <span id="pSource" class="status-badge bg-blue-500/20 text-blue-400">N/A</span>
                         </div>
-                        <div class="flex justify-between items-center text-sm">
-                            <span class="text-text-dim">Live Status</span>
-                            <span id="pLive" class="status-badge bg-gray-500/20 text-gray-400">N/A</span>
-                        </div>
-                        <div class="flex justify-between items-center text-sm">
-                            <span class="text-text-dim">Files Analyzed</span>
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-text-dim">Files</span>
                             <span id="pFileCount" class="font-mono">0</span>
                         </div>
                     </div>
                     <div class="glass-panel p-6">
-                        <h3 class="text-sm font-semibold uppercase tracking-wider text-text-dim mb-4">Environment Detection</h3>
-                        <div id="frameworks" class="flex flex-wrap gap-2">
-                             <span class="text-xs text-text-dim italic">No major frameworks detected</span>
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-text-dim mb-3">Tech Stack</h3>
+                        <div id="frameworks" class="flex flex-wrap gap-1">
+                             <span class="text-[10px] text-text-dim italic">None detected</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="glass-panel p-6">
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-text-dim mb-4">AI Detection Insights</h3>
+                        <div id="aiInsight" class="text-sm text-text-dim space-y-2 max-h-48 overflow-y-auto pr-2">
+                            <p class="italic opacity-50">Pending analysis...</p>
+                        </div>
+                    </div>
+                    <div class="glass-panel p-6">
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-text-dim mb-4">Critical Bug Log</h3>
+                        <div id="bugLog" class="text-sm space-y-3 max-h-48 overflow-y-auto pr-2">
+                            <p class="text-text-dim italic opacity-50">Pending analysis...</p>
                         </div>
                     </div>
                 </div>
@@ -221,6 +242,7 @@
     </main>
 
     <script type="module">
+        import { GoogleGenAI } from 'https://esm.run/@google/genai';
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
         import { getFirestore, collection, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
@@ -237,6 +259,20 @@
             console.log("Firebase initialized");
         });
 
+        // Gemini Logic
+        let aiClient = null;
+        async function initAI() {
+            // In AI Studio Build, the key is provided in the environment.
+            // For pure HTML, we'll try to get it from a bridge or assume platform handles it.
+            // Since we're using esm.run, we need the key.
+            const response = await fetch('/api/analyze?action=config');
+            const { apiKey } = await response.json();
+            if (apiKey) {
+                aiClient = new GoogleGenAI({ apiKey });
+            }
+        }
+        initAI();
+
         const fileInput = document.getElementById('fileInput');
         const dropZone = document.getElementById('dropZone');
         const githubUrl = document.getElementById('githubUrl');
@@ -247,30 +283,88 @@
         
         let chartInstance = null;
 
+        const performAIAnalysis = async (samples) => {
+            if (!aiClient) return;
+            
+            const aiInsight = document.getElementById('aiInsight');
+            const bugLog = document.getElementById('bugLog');
+            const aiText = document.getElementById('aiText');
+            const aiCircle = document.getElementById('aiCircle');
+
+            aiInsight.innerHTML = '<p class="animate-pulse">Analyzing patterns...</p>';
+            bugLog.innerHTML = '<p class="animate-pulse">Scanning for vulnerabilities...</p>';
+
+            const codeString = samples.map(s => `--- FILE: ${s.name} ---\n${s.content}`).join('\n\n');
+            const prompt = `Analyze this code for two things:
+1. AI Generation Probability: How likely is this code generated by an AI? (Give a percentage and 2-3 reasons).
+2. Bug Detection: Find potential bugs or security issues.
+
+Return ONLY a JSON object with this exact structure:
+{
+  "aiProbability": number,
+  "aiReasons": string[],
+  "bugs": [{"severity": "high"|"med"|"low", "issue": string, "fix": string}]
+}`;
+
+            try {
+                const result = await aiClient.models.generateContent({
+                    model: "gemini-3-flash-preview",
+                    contents: [{ parts: [{ text: codeString + "\n\n" + prompt }] }],
+                    config: { responseMimeType: "application/json" }
+                });
+
+                const data = JSON.parse(result.text);
+                
+                // Update AI UI
+                aiText.innerText = `${data.aiProbability}%`;
+                const circ = 263.8;
+                aiCircle.style.strokeDashoffset = circ - (data.aiProbability / 100) * circ;
+                
+                aiInsight.innerHTML = data.aiReasons.map(r => `<div class="flex gap-2 text-xs mb-1"><span class="text-blue-500">•</span><p>${r}</p></div>`).join('');
+                
+                bugLog.innerHTML = data.bugs.length > 0
+                    ? data.bugs.map(b => `
+                        <div class="p-2 glass-panel border-l-4 ${b.severity === 'high' ? 'border-red-500' : b.severity === 'med' ? 'border-orange-500' : 'border-yellow-500'}">
+                            <div class="flex justify-between items-start mb-1">
+                                <span class="text-[10px] font-bold uppercase ${b.severity === 'high' ? 'text-red-400' : 'text-orange-400'}">${b.severity}</span>
+                            </div>
+                            <p class="text-xs text-text-main font-semibold">${b.issue}</p>
+                            <p class="text-[10px] text-text-dim mt-1">Fix: ${b.fix}</p>
+                        </div>
+                    `).join('')
+                    : '<p class="text-success text-xs">No critical bugs detected.</p>';
+
+                return data;
+            } catch (err) {
+                console.error("AI Analysis failed", err);
+                aiInsight.innerHTML = '<p class="text-danger text-xs">Analysis failed.</p>';
+                bugLog.innerHTML = '<p class="text-danger text-xs">Error during scan.</p>';
+            }
+        };
+
         // UI Helpers
         const setScore = (score) => {
             const circle = document.getElementById('scoreCircle');
-            const circumference = 364.4;
+            const circumference = 263.8;
             const offset = circumference - (score / 100) * circumference;
             circle.style.strokeDashoffset = offset;
             document.getElementById('scoreText').innerText = `${score}%`;
         };
 
-        const updateUI = (data) => {
+        const updateUI = async (data) => {
             resultArea.style.display = 'block';
             exportBtn.style.display = 'flex';
             document.getElementById('pName').innerText = data.projectName;
             document.getElementById('pSource').innerText = data.source;
             document.getElementById('pFileCount').innerText = data.fileCount;
-            document.getElementById('pLive').innerText = data.isLive ? 'ACTIVE' : 'INACTIVE';
-            document.getElementById('pLive').className = `status-badge ${data.isLive ? 'bg-success/20 text-success' : 'bg-gray-500/20 text-gray-400'}`;
+            // No pLive in new layout but kept for compatibility or add back
 
             setScore(data.originalityScore);
 
             const fwArea = document.getElementById('frameworks');
             fwArea.innerHTML = data.frameworks.length > 0 
-                ? data.frameworks.map(f => `<span class="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 py-1 rounded text-xs font-mono">${f}</span>`).join('')
-                : '<span class="text-xs text-text-dim italic">No major frameworks detected</span>';
+                ? data.frameworks.map(f => `<span class="bg-blue-500/10 text-blue-400 border border-blue-500/10 px-2 py-0.5 rounded text-[10px] font-mono">${f}</span>`).join('')
+                : '<span class="text-[10px] text-text-dim italic">None detected</span>';
 
             const ctx = document.getElementById('langChart').getContext('2d');
             if (chartInstance) chartInstance.destroy();
@@ -289,11 +383,17 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { position: 'bottom', labels: { color: '#94A3B8', font: { size: 10 } } }
+                        legend: { position: 'bottom', labels: { color: '#94A3B8', font: { size: 10 }, padding: 10, boxWidth: 10 } }
                     },
-                    cutout: '70%'
+                    cutout: '75%'
                 }
             });
+
+            // Start AI analysis
+            if (data.samples && data.samples.length > 0) {
+                const aiResult = await performAIAnalysis(data.samples);
+                data.aiDetection = aiResult;
+            }
 
             // Save to Firebase
             if (db) {
@@ -308,7 +408,7 @@
             loader.classList.remove('hidden');
             resultArea.style.display = 'none';
             try {
-                const url = isZip ? '/api/analyze.php?action=zip' : '/api/analyze.php?action=github';
+                const url = isZip ? '/api/analyze?action=zip' : '/api/analyze?action=github';
                 const options = isZip 
                     ? { method: 'POST', body: formData }
                     : { 

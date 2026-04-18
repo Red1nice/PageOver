@@ -1,6 +1,6 @@
 {
   "name": "PageOver",
-  "description": "A sophisticated project analysis and comparison platform. Upload ZIPs or link GitHub repositories to analyze language usage, framework detection, and project originality with real-time visual comparisons.",
+  "description": "An intelligent project analysis platform built with PHP and Vanilla JS. Analyzes GitHub repos and ZIPs for language usage, framework detection, and uses Gemini AI for automated bug detection and AI-generated code identification.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
