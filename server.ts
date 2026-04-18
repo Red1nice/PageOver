@@ -77,14 +77,18 @@ function analyzeFiles(files: { name: string; content?: string }[]) {
   });
 
   const languagePercentages: Record<string, number> = {};
-  for (const lang in languageCounts) {
-    languagePercentages[lang] = Math.round((languageCounts[lang] / totalValidFiles) * 100);
+  if (totalValidFiles > 0) {
+    for (const lang in languageCounts) {
+      languagePercentages[lang] = Math.round((languageCounts[lang] / totalValidFiles) * 100);
+    }
   }
 
   // Structural Originality Score (Mock Logic: Based on folder complexity and file variety)
   const uniqueLangs = Object.keys(languageCounts).length;
-  const folderDepth = Math.max(...files.map(f => f.name.split('/').length));
-  const score = Math.min(100, (uniqueLangs * 10) + (folderDepth * 5) + (totalValidFiles / 20));
+  const folderDepth = files.length > 0 ? Math.max(...files.map(f => f.name.split("/").length)) : 0;
+  const score = totalValidFiles > 0 
+    ? Math.min(100, (uniqueLangs * 10) + (folderDepth * 5) + (totalValidFiles / 20))
+    : 0;
 
   return {
     languages: languagePercentages,
@@ -141,31 +145,39 @@ app.post("/api/analyze/github", async (req, res) => {
       githubHeaders["Authorization"] = `Bearer ${process.env.GITHUB_TOKEN}`;
     }
 
-    // Use GitHub API to fetch recursive tree
-    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/main?recursive=1`;
+    // 1. Fetch Repo Metadata to find default branch
+    let repoInfo;
+    try {
+      repoInfo = await axios.get(`https://api.github.com/repos/${owner}/${repo}`, { headers: githubHeaders });
+    } catch (err: any) {
+      console.error("GitHub Repo Info Error:", err.response?.data || err.message);
+      const isRateLimit = err.response?.status === 403 && err.response?.headers["x-ratelimit-remaining"] === "0";
+      return res.status(err.response?.status || 500).json({ 
+        error: isRateLimit ? "GitHub Rate limit exceeded. Please add a GITHUB_TOKEN." : "Repository not found or private." 
+      });
+    }
+
+    const defaultBranch = repoInfo.data.default_branch || "main";
+    const isLive = !!repoInfo.data.homepage;
+
+    // 2. Fetch recursive tree
+    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`;
     let response;
     try {
       response = await axios.get(apiUrl, { headers: githubHeaders });
     } catch (err: any) {
-      if (err.response?.status === 404 || err.response?.status === 422) {
-        // Try master branch alternate if main is not found
-        try {
-          response = await axios.get(`https://api.github.com/repos/${owner}/${repo}/git/trees/master?recursive=1`, { 
-            headers: githubHeaders 
-          });
-        } catch (masterErr) {
-          throw err; // Throw original error if master also fails
-        }
-      } else {
-        throw err;
+      console.error("GitHub Tree Error:", err.response?.data || err.message);
+      // Fallback if the tree is too large for recursive API
+      if (err.response?.status === 409) {
+        return res.status(409).json({ error: "Repository tree is too large for recursive scanning." });
       }
+      return res.status(err.response?.status || 500).json({ error: "Failed to fetch repository structure." });
     }
 
     const tree = response.data.tree;
     const files = tree.filter((f: any) => f.type === "blob").map((f: any) => ({ name: f.path }));
     
-    // For GitHub, we might not fetch all file contents for performance in this demo,
-    // but we can fetch marker files to detect frameworks.
+    // We fetch marker files to detect frameworks.
     const markers = ["package.json", "composer.json", "requirements.txt", "Gemfile"];
     const fileWithContentPromises = tree
         .filter((f: any) => markers.some(m => f.path.endsWith(m)))
@@ -175,7 +187,6 @@ app.post("/api/analyze/github", async (req, res) => {
               const content = Buffer.from(contentRes.data.content, "base64").toString("utf-8");
               return { name: f.path, content };
             } catch (markerErr) {
-              console.warn(`Failed to fetch marker file ${f.path}:`, markerErr);
               return { name: f.path, content: "" };
             }
         });
@@ -183,17 +194,10 @@ app.post("/api/analyze/github", async (req, res) => {
     const markerFiles = await Promise.all(fileWithContentPromises);
     const analysis = analyzeFiles([...files, ...markerFiles]);
     
-    // Check if live (availability check)
-    let isLive = false;
-    try {
-        const check = await axios.get(url, { timeout: 3000 });
-        isLive = check.status === 200;
-    } catch {}
-
     res.json({ ...analysis, projectName: repo, source: "github", isLive });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch GitHub repository" });
+  } catch (err: any) {
+    console.error("General GitHub Error:", err);
+    res.status(500).json({ error: "Internal Analysis Error" });
   }
 });
 

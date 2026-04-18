@@ -90,8 +90,9 @@ export default function App() {
       const res = await axios.post("/api/analyze/github", { url: githubUrl });
       setResult(res.data);
       saveToFirebase(res.data);
-    } catch (err) {
-      alert("Failed to analyze GitHub repository");
+    } catch (err: any) {
+      const msg = err.response?.data?.error || "Failed to analyze GitHub repository";
+      alert(msg);
     } finally {
       setLoading(false);
     }
