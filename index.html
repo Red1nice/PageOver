@@ -1,13 +1,373 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PageOver | Project Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/framer-motion/10.16.4/framer-motion.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --bg: #0D0E12;
+            --panel: #16181D;
+            --border: #2A2E37;
+            --text-main: #E2E8F0;
+            --text-dim: #94A3B8;
+            --accent: #3B82F6;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --mono: 'JetBrains Mono', 'Courier New', monospace;
+            --sans: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        }
 
+        body {
+            background: var(--bg);
+            color: var(--text-main);
+            font-family: var(--sans);
+        }
+
+        .glass-panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            transition: all 0.2s;
+        }
+        .btn-primary:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-main);
+        }
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 flex flex-col items-center">
+    <!-- Header -->
+    <header class="w-full max-w-6xl mb-12 flex flex-col md:flex-row justify-between items-center gap-6">
+        <div class="flex items-center gap-4">
+            <svg width="48" height="48" viewBox="0 0 100 100" class="drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]">
+                <circle cx="50" cy="50" r="45" fill="none" stroke="#2A2E37" stroke-width="2"/>
+                <path d="M30 35 L70 35 L70 65 L30 65 Z" fill="#3B82F6" opacity="0.8"/>
+                <path d="M35 45 L65 45" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                <path d="M35 55 L55 55" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                <circle cx="70" cy="35" r="8" fill="#10B981"/>
+            </svg>
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight">PAGEOVER</h1>
+                <p class="text-xs text-blue-400 font-mono tracking-widest uppercase opacity-70">
+                    Intelligent Project Evaluation & Visualization Platform
+                </p>
+            </div>
+        </div>
+        <div class="flex gap-4">
+            <button id="exportBtn" style="display: none;" class="btn-secondary px-6 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export Report PDF
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="w-full max-w-6xl space-y-8">
+        <!-- Input Section -->
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="glass-panel p-8 space-y-6">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-blue-500/10 rounded-lg">
+                        <svg class="text-blue-500" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    </div>
+                    <h2 class="text-xl font-semibold">Local Repository</h2>
+                </div>
+                <div id="dropZone" class="border-2 border-dashed border-border rounded-xl p-12 text-center cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 transition-all">
+                    <input type="file" id="fileInput" class="hidden" accept=".zip">
+                    <p class="text-text-dim text-sm mb-2">Drag & Drop project ZIP here</p>
+                    <p class="text-xs text-text-dim/50">or click to browse local files</p>
+                </div>
+            </div>
+
+            <div class="glass-panel p-8 space-y-6 text-main">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-purple-500/10 rounded-lg">
+                        <svg class="text-purple-500" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                    </div>
+                    <h2 class="text-xl font-semibold">Remote Repository</h2>
+                </div>
+                <div class="space-y-4">
+                    <input type="text" id="githubUrl" placeholder="https://github.com/owner/repo" class="w-full bg-bg border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors">
+                    <button id="analyzeGithubBtn" class="btn-primary w-full py-3 rounded-lg text-sm font-semibold tracking-wide">ANALYZE REPOSITORY</button>
+                    <p class="text-xs text-text-dim text-center">Enter public GitHub URL for deep structure analysis</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Loading State -->
+        <div id="loader" class="hidden flex flex-col items-center py-20">
+            <div class="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+            <p class="text-text-dim animate-pulse">Scanning architecture & metadata...</p>
+        </div>
+
+        <!-- Result Section -->
+        <div id="resultArea" style="display: none;" class="space-y-8 pb-20">
+            <div id="reportContent" class="space-y-8">
+                <!-- Overview -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="glass-panel p-6 flex flex-col items-center justify-center text-center">
+                        <span class="text-sm text-text-dim uppercase tracking-wider mb-2">Originality Score</span>
+                        <div class="relative w-32 h-32 flex items-center justify-center">
+                            <svg class="w-full h-full transform -rotate-90">
+                                <circle cx="64" cy="64" r="58" stroke="var(--border)" stroke-width="8" fill="none"/>
+                                <circle id="scoreCircle" cx="64" cy="64" r="58" stroke="var(--accent)" stroke-width="8" fill="none" stroke-dasharray="364.4" stroke-dashoffset="364.4" stroke-linecap="round"/>
+                            </svg>
+                            <span id="scoreText" class="absolute text-3xl font-bold">0%</span>
+                        </div>
+                    </div>
+                    <div class="glass-panel p-6 space-y-4">
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-text-dim">Project Name</span>
+                            <span id="pName" class="font-mono text-blue-400">N/A</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-text-dim">Source</span>
+                            <span id="pSource" class="status-badge bg-blue-500/20 text-blue-400">N/A</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-text-dim">Live Status</span>
+                            <span id="pLive" class="status-badge bg-gray-500/20 text-gray-400">N/A</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-text-dim">Files Analyzed</span>
+                            <span id="pFileCount" class="font-mono">0</span>
+                        </div>
+                    </div>
+                    <div class="glass-panel p-6">
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-text-dim mb-4">Environment Detection</h3>
+                        <div id="frameworks" class="flex flex-wrap gap-2">
+                             <span class="text-xs text-text-dim italic">No major frameworks detected</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="glass-panel p-8">
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-text-dim mb-6">Language Ecosystem</h3>
+                        <div class="h-64 flex items-center justify-center">
+                            <canvas id="langChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="glass-panel p-8">
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-text-dim mb-6">System Health</h3>
+                        <div class="space-y-6">
+                            <div class="space-y-2">
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-text-dim uppercase">Security Posture</span>
+                                    <span class="text-success">RESTRICTED</span>
+                                </div>
+                                <div class="w-full bg-border h-1.5 rounded-full overflow-hidden">
+                                    <div class="bg-success w-[85%] h-full"></div>
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-text-dim uppercase">Scalability Index</span>
+                                    <span class="text-warning">OPTIMAL</span>
+                                </div>
+                                <div class="w-full bg-border h-1.5 rounded-full overflow-hidden">
+                                    <div class="bg-warning w-[60%] h-full"></div>
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-text-dim uppercase">Maintainability</span>
+                                    <span class="text-accent">HIGH</span>
+                                </div>
+                                <div class="w-full bg-border h-1.5 rounded-full overflow-hidden">
+                                    <div class="bg-accent w-[75%] h-full"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+        import { getFirestore, collection, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+        // Load config
+        const fetchConfig = async () => {
+             const res = await fetch('/firebase-applet-config.json');
+             return await res.json();
+        }
+
+        let db;
+        fetchConfig().then(config => {
+            const app = initializeApp(config);
+            db = getFirestore(app);
+            console.log("Firebase initialized");
+        });
+
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+        const githubUrl = document.getElementById('githubUrl');
+        const analyzeGithubBtn = document.getElementById('analyzeGithubBtn');
+        const resultArea = document.getElementById('resultArea');
+        const loader = document.getElementById('loader');
+        const exportBtn = document.getElementById('exportBtn');
+        
+        let chartInstance = null;
+
+        // UI Helpers
+        const setScore = (score) => {
+            const circle = document.getElementById('scoreCircle');
+            const circumference = 364.4;
+            const offset = circumference - (score / 100) * circumference;
+            circle.style.strokeDashoffset = offset;
+            document.getElementById('scoreText').innerText = `${score}%`;
+        };
+
+        const updateUI = (data) => {
+            resultArea.style.display = 'block';
+            exportBtn.style.display = 'flex';
+            document.getElementById('pName').innerText = data.projectName;
+            document.getElementById('pSource').innerText = data.source;
+            document.getElementById('pFileCount').innerText = data.fileCount;
+            document.getElementById('pLive').innerText = data.isLive ? 'ACTIVE' : 'INACTIVE';
+            document.getElementById('pLive').className = `status-badge ${data.isLive ? 'bg-success/20 text-success' : 'bg-gray-500/20 text-gray-400'}`;
+
+            setScore(data.originalityScore);
+
+            const fwArea = document.getElementById('frameworks');
+            fwArea.innerHTML = data.frameworks.length > 0 
+                ? data.frameworks.map(f => `<span class="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 py-1 rounded text-xs font-mono">${f}</span>`).join('')
+                : '<span class="text-xs text-text-dim italic">No major frameworks detected</span>';
+
+            const ctx = document.getElementById('langChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(data.languages),
+                    datasets: [{
+                        data: Object.values(data.languages),
+                        backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'],
+                        borderColor: '#16181D',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#94A3B8', font: { size: 10 } } }
+                    },
+                    cutout: '70%'
+                }
+            });
+
+            // Save to Firebase
+            if (db) {
+                addDoc(collection(db, "sessions"), {
+                    ...data,
+                    timestamp: serverTimestamp()
+                }).catch(e => console.error("Firebase save error", e));
+            }
+        };
+
+        const analyze = async (formData, isZip = true) => {
+            loader.classList.remove('hidden');
+            resultArea.style.display = 'none';
+            try {
+                const url = isZip ? '/api/analyze.php?action=zip' : '/api/analyze.php?action=github';
+                const options = isZip 
+                    ? { method: 'POST', body: formData }
+                    : { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: githubUrl.value })
+                    };
+                
+                const res = await fetch(url, options);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                updateUI(data);
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                loader.classList.add('hidden');
+            }
+        };
+
+        // Events
+        dropZone.onclick = () => fileInput.click();
+        fileInput.onchange = (e) => {
+            if (e.target.files[0]) {
+                const fd = new FormData();
+                fd.append('file', e.target.files[0]);
+                analyze(fd, true);
+            }
+        };
+
+        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('border-blue-500'); };
+        dropZone.ondragleave = () => dropZone.classList.remove('border-blue-500');
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-blue-500');
+            if (e.dataTransfer.files[0]) {
+                const fd = new FormData();
+                fd.append('file', e.dataTransfer.files[0]);
+                analyze(fd, true);
+            }
+        };
+
+        analyzeGithubBtn.onclick = () => {
+            if (!githubUrl.value) return;
+            analyze(null, false);
+        };
+
+        // PDF Export
+        document.getElementById('exportBtn').onclick = () => {
+            const element = document.getElementById('reportContent');
+            html2canvas(element, { backgroundColor: '#0D0E12', scale: 2 }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
+                const imgProps = pdf.getImageProperties(imgData);
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                pdf.save(`PageOver_Report_${Date.now()}.pdf`);
+            });
+        };
+    </script>
+</body>
+</html>
