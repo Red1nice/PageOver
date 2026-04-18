@@ -131,10 +131,13 @@ app.post("/api/analyze/github", async (req, res) => {
   if (!url) return res.status(400).json({ error: "URL is required" });
 
   try {
-    // Basic extraction of owner/repo from URL
-    const match = url.match(/github\.com\/([^/]+)\/([^/]+)/);
-    if (!match) return res.status(400).json({ error: "Invalid GitHub URL" });
-    const [_, owner, repo] = match;
+    // Robust extraction of owner/repo from URL
+    const urlParts = url.replace(/\/$/, "").split("/");
+    const repoWithGit = urlParts.pop() || "";
+    const owner = urlParts.pop() || "";
+    const repo = repoWithGit.replace(/\.git$/, "");
+
+    if (!owner || !repo) return res.status(400).json({ error: "Invalid GitHub URL format." });
 
     // GitHub API Headers (User-Agent is REQUIRED)
     const githubHeaders: Record<string, string> = {
@@ -150,11 +153,19 @@ app.post("/api/analyze/github", async (req, res) => {
     try {
       repoInfo = await axios.get(`https://api.github.com/repos/${owner}/${repo}`, { headers: githubHeaders });
     } catch (err: any) {
-      console.error("GitHub Repo Info Error:", err.response?.data || err.message);
+      const githubMsg = err.response?.data?.message || err.message;
+      console.error("GitHub Repo Info Error:", githubMsg);
+      
       const isRateLimit = err.response?.status === 403 && err.response?.headers["x-ratelimit-remaining"] === "0";
-      return res.status(err.response?.status || 500).json({ 
-        error: isRateLimit ? "GitHub Rate limit exceeded. Please add a GITHUB_TOKEN." : "Repository not found or private." 
-      });
+      if (isRateLimit) {
+        return res.status(403).json({ error: "GitHub Rate limit exceeded. Please add a GITHUB_TOKEN in Secrets." });
+      }
+      
+      if (err.response?.status === 404) {
+        return res.status(404).json({ error: `Repository '${owner}/${repo}' not found. Verify the URL is public.` });
+      }
+
+      return res.status(err.response?.status || 500).json({ error: `GitHub API Error: ${githubMsg}` });
     }
 
     const defaultBranch = repoInfo.data.default_branch || "main";
