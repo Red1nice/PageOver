@@ -132,18 +132,34 @@ app.post("/api/analyze/github", async (req, res) => {
     if (!match) return res.status(400).json({ error: "Invalid GitHub URL" });
     const [_, owner, repo] = match;
 
+    // GitHub API Headers (User-Agent is REQUIRED)
+    const githubHeaders: Record<string, string> = {
+      "Accept": "application/vnd.github.v3+json",
+      "User-Agent": "PageOver-Analyzer",
+    };
+    if (process.env.GITHUB_TOKEN) {
+      githubHeaders["Authorization"] = `Bearer ${process.env.GITHUB_TOKEN}`;
+    }
+
     // Use GitHub API to fetch recursive tree
     const apiUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/main?recursive=1`;
-    const response = await axios.get(apiUrl, {
-      headers: {
-        Accept: "application/vnd.github.v3+json",
-      },
-    }).catch(async () => {
-        // Try master if main fails
-        return axios.get(`https://api.github.com/repos/${owner}/${repo}/git/trees/master?recursive=1`, {
-            headers: { Accept: "application/vnd.github.v3+json" }
-        });
-    });
+    let response;
+    try {
+      response = await axios.get(apiUrl, { headers: githubHeaders });
+    } catch (err: any) {
+      if (err.response?.status === 404 || err.response?.status === 422) {
+        // Try master branch alternate if main is not found
+        try {
+          response = await axios.get(`https://api.github.com/repos/${owner}/${repo}/git/trees/master?recursive=1`, { 
+            headers: githubHeaders 
+          });
+        } catch (masterErr) {
+          throw err; // Throw original error if master also fails
+        }
+      } else {
+        throw err;
+      }
+    }
 
     const tree = response.data.tree;
     const files = tree.filter((f: any) => f.type === "blob").map((f: any) => ({ name: f.path }));
@@ -154,9 +170,14 @@ app.post("/api/analyze/github", async (req, res) => {
     const fileWithContentPromises = tree
         .filter((f: any) => markers.some(m => f.path.endsWith(m)))
         .map(async (f: any) => {
-            const contentRes = await axios.get(f.url);
-            const content = Buffer.from(contentRes.data.content, 'base64').toString('utf-8');
-            return { name: f.path, content };
+            try {
+              const contentRes = await axios.get(f.url, { headers: githubHeaders });
+              const content = Buffer.from(contentRes.data.content, "base64").toString("utf-8");
+              return { name: f.path, content };
+            } catch (markerErr) {
+              console.warn(`Failed to fetch marker file ${f.path}:`, markerErr);
+              return { name: f.path, content: "" };
+            }
         });
 
     const markerFiles = await Promise.all(fileWithContentPromises);
