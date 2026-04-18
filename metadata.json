@@ -1,0 +1,6 @@
+{
+  "name": "PageOver",
+  "description": "A sophisticated project analysis and comparison platform. Upload ZIPs or link GitHub repositories to analyze language usage, framework detection, and project originality with real-time visual comparisons.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

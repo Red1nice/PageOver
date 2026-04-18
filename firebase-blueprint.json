@@ -1,0 +1,36 @@
+{
+  "entities": {
+    "AnalysisSession": {
+      "title": "Analysis Session",
+      "description": "Stored results of a project analysis",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "projectName": { "type": "string" },
+        "source": { "type": "string", "enum": ["zip", "github"] },
+        "languages": { 
+          "type": "object",
+          "description": "Mapping of language to percentage"
+        },
+        "frameworks": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "platforms": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "originalityScore": { "type": "number" },
+        "isLive": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["projectName", "source", "languages", "timestamp"]
+    }
+  },
+  "firestore": {
+    "sessions": {
+      "schema": "AnalysisSession",
+      "description": "Collection of analysis results"
+    }
+  }
+}
